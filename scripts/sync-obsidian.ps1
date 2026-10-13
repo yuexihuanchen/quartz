@@ -4,15 +4,20 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Source  = 'D:\chd\data\Obsidian Vault\0.数字花园'
+$Sources = @(
+    @{ Src = 'D:\chd\data\Obsidian Vault\0.数字花园'; Sub = '' },
+    @{ Src = 'D:\chd\data\Obsidian Vault\learning';  Sub = 'learning' }
+)
 $Quartz  = 'D:\workpace\quartz\my-site'
 $Target  = Join-Path $Quartz 'content\notes'
 $Branch  = 'v4'
 
 # 1. 校验路径
-if (-not (Test-Path -LiteralPath $Source)) {
-    New-Item -ItemType Directory -Path $Source -Force | Out-Null
-    Write-Host "[init] 已创建公开笔记目录: $Source"
+foreach ($s in $Sources) {
+    if (-not (Test-Path -LiteralPath $s.Src)) {
+        New-Item -ItemType Directory -Path $s.Src -Force | Out-Null
+        Write-Host "[init] 已创建公开笔记目录: $($s.Src)"
+    }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Quartz 'quartz.config.ts'))) {
     Write-Error "Quartz 仓库不存在: $Quartz"; exit 1
@@ -22,17 +27,19 @@ if (-not (Test-Path -LiteralPath $Target)) {
 }
 
 # 2+3+6. robocopy /MIR 递归镜像，删除目标中源端已删除的文件（仅限 content\notes 内），排除系统/私密目录
-$rob = robocopy $Source $Target /MIR `
-    /XD ".obsidian" ".git" ".trash" ".sync" ".cache" "Templatetmp" `
-    /XF ".DS_Store" "Thumbs.db" "desktop.ini" "ehthumbs.db" `$RECYCLE.BIN `
-    /R:1 /W:1 /NP /ndl
-$rc = $LASTEXITCODE
-if ($rc -ge 8) {
-    Write-Error "robocopy 同步失败 (code=$rc)"; exit 1
+foreach ($s in $Sources) {
+    $dest = if ($s.Sub) { Join-Path $Target $s.Sub } else { $Target }
+    $rob = robocopy $s.Src $dest /MIR `
+        /XD ".obsidian" ".git" ".trash" ".sync" ".cache" "node_modules" `
+        /XF ".DS_Store" "Thumbs.db" "desktop.ini" "ehthumbs.db" `$RECYCLE.BIN `
+        /R:1 /W:1 /NP /ndl
+    $rc = $LASTEXITCODE
+    if ($rc -ge 8) {
+        Write-Error "robocopy 同步失败 ($($s.Src) -> $dest, code=$rc)"; exit 1
+    }
+    Write-Host "`n[robocopy 摘要] $($s.Src) -> $dest"
+    $rob | Select-String -Pattern '^\s*(Dirs|Files|Bytes):' | ForEach-Object { $_.Line }
 }
-$copied  = @($rob | Where-Object { $_ -match '^\s*(New File|Newer File|.*Copy)' -and $_ -notmatch 'Files\s*:' })
-Write-Host "`n[robocopy 摘要]"
-$rob | Select-String -Pattern '^\s*(Dirs|Files|Bytes):' | ForEach-Object { $_.Line }
 
 # 4. 绝不触碰 content\index.md 与 Quartz 配置（本脚本只写入 content\notes）
 
