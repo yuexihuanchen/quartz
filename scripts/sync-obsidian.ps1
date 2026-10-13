@@ -82,7 +82,16 @@ try {
         Write-Warning "push 失败（多为 GitHub 授权问题），本地提交已完成，文件未受影响。请完成浏览器登录后重跑 ."
         exit 1
     }
-    Write-Host "`n[sync] 完成：已同步、构建、提交并推送到 origin/$Branch"
+    Write-Host "`n[sync] 已同步、构建、提交并推送到 origin/$Branch"
+
+    # Vercel 部署（该账号未装 GitHub App，push 不会自动触发，需 CLI 部署）
+    Write-Host "`n[deploy] npx vercel deploy --prod --yes"
+    npx vercel deploy --prod --yes
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Vercel 部署失败（不影响 GitHub 推送）。可手动重试: npx vercel deploy --prod --yes"
+    } else {
+        Write-Host "[deploy] Vercel 生产环境已更新: https://my-site-pink-iota.vercel.app"
+    }
 } finally {
     Pop-Location
 }

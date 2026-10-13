@@ -16,8 +16,7 @@ const config: QuartzConfig = {
       provider: "plausible",
     },
     locale: "zh-CN",
-    // baseUrl: 部署到 Vercel 后更新为 *.vercel.app 域名
-    baseUrl: "quartz.jzhao.xyz",
+    baseUrl: "my-site-pink-iota.vercel.app",
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "modified",
     theme: {
