@@ -4,7 +4,7 @@
 | Ownership（所有权） | 谁负责管理资源并最终释放它？     |
 | Lifetime（生命周期） | 对象从什么时候存在，到什么时候销毁？ |
 | Reference（引用）  | 我通过什么方式访问已有对象？     |
-## 引用、左值、右值
+## 左值、右值
 C++ 左值引用不拥有对象的内存，它只是给已经存在的对象提供了另一个访问入口。对象的所有权和生命周期不会因为创建引用而发生改变。
 `const` 引用在绑定特定临时对象时存在生命周期延长规则，但这不意味着所有 `const` 引用都能延长对象生命周期。
 引用相当于给一个有内存的对象换一条路径访问该对象内存，如果有const修饰，则引用不意味着对象本身不可变，而是不能通过这条引用访问路径修改它。
@@ -17,48 +17,88 @@ std::string& getString()
     return s;  // 错误：返回局部对象的引用
 }
 
-### 引用和指针
-指针是一种独立的对象，用来保存另一个对象的地址；引用则是一种语言层面的别名关系，用来表示对已有对象的直接访问。
+### 左值与右值
+***值类别是表达式的性质，而不是对象的性质，每个表达式都属于三个基本类型中的一种：纯右值（prvalue）、亡值（xvalue）、左值（lvalue）。***
+
+==🔵纯右值==符合下列之一的表达式：
+	计算某个运输符的操作数的值（这种纯右值无结果对象）。
+	初始化某个对象（这种除右值有一个结果对象）。
+即要么是纯粹的字面量，要么是求值结果相当于字面量或匿名临时对象。如1+2，非引用返回的临时表达量、运算表达式产生的临时变量、原始字面量lambda表达式。
+**字面量除了字符串字面量外 均为纯右值，而字符串字面量是一个左值，类型为const char数组。***
+==🔵亡值==代表他的资源能够被重新使用的对象或位域的泛左值
+ 
+==🔵左值==初步印象，有持久身份，表达式结束后依然存在的***持久对象***。故可以取地址&、可作为函数返回值、可绑定到左值引用 int&。
+==🔵右值==初步印象，临时的无持久身份，表达式结束之后不在存在的***临时对象***。故生命周期结束后自动销毁，不可取地址、通常不可作为函数返回值（除非移动语义），可绑定到右值引用int&&。
+一般来说，左值不可以绑定到要转换的表达式，字面常量或返回右值的表达式。右值引用则相反，不能绑到一个左值上，必须绑定到右值引用上，&&。右值引用只能绑定到一个将要销毁的对象上。
+==>std::move(x), x 是左值，std::move(x)右值。
+### 左值引用右值引用
+要拿到一个亡值，就要用到右值引用：***T&&*** 其中T是类型，右值引用让这个临时变量的生名周期延长，只要变量还活着，那么亡值将继续存活。即可以绑定那写会被销毁的临时对象，右值引用允许我们对其资源进行移动操作而不是复制操作。
+***std::move()*** 将左值参数无条件的转换为右值
+	std::move()只是***类型转换***，把左值强制转换成右值引用表达式（T&&），它本身不搬移资源也不销毁任何东西。真正的移动发生在==🔵移动构造函数==、移动赋值运算符。
+移动构造函数：专门用于将一个右值引用对象，移动到另一个对象的构造函数，通过资所有权从一个对象转移到另一个对象避免不必要的数据复制。
+### 引用坍缩规则
+模板函数中使用 `T&&` 不一定能进行右值引用，当传入左值时，此函数的引用将被推导为左值。 更准确的讲，**无论模板参数是什么类型的引用，当且仅当实参类型为右引用时，模板参数才能被推导为右引用类型**。***凡是折叠中出现左值引用，优先将其折叠为左值引用。***
 ```
-std::string s = "Hello";
-std::string& r = s;
-std::string* p = &s;
+typedef int&  lref;
+typedef int&& rref;
+int n;
+
+lref&  r1 = n; // type of r1 is int&
+lref&& r2 = n; // type of r2 is int&
+rref&  r3 = n; // type of r3 is int&
+rref&& r4 = 1; // type of r4 is int&&
 ```
-假设 `s` 的地址是 `0x1000`。
-
-概念内存模型
-
-![](data:image/svg+xml;charset=utf-8,%3Csvg%20font-family%3D%22-apple-system-body%2C%20ui-sans-serif%2C%20-apple-system%2C%20system-ui%2C%20%26quot%3BSegoe%20UI%26quot%3B%2C%20Helvetica%2C%20%26quot%3BApple%20Color%20Emoji%26quot%3B%2C%20Arial%2C%20sans-serif%2C%20%26quot%3BSegoe%20UI%20Emoji%26quot%3B%2C%20%26quot%3BSegoe%20UI%20Symbol%26quot%3B%22%20font-weight%3D%22400%22%20data-d-component%3D%22svg%22%20fill%3D%22currentColor%22%20style%3D%22color%3Argb\(13%2C%2013%2C%2013\)%22%20viewBox%3D%220%200%20344%20287%22%20width%3D%22100%25%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20x%3D%2295%22%20y%3D%2212%22%20width%3D%22154%22%20height%3D%2254%22%20rx%3D%228%22%20fill%3D%22%23DCECFD%22%20stroke%3D%22%234D83BC%22%20stroke-width%3D%221.5%22%2F%3E%3Ctext%20x%3D%22172%22%20y%3D%2231%22%20text-anchor%3D%22middle%22%20font-size%3D%2213%22%20font-weight%3D%22bold%22%20fill%3D%22%23224D7E%22%3Estd%3A%3Astring%20s%3C%2Ftext%3E%3Ctext%20x%3D%22172%22%20y%3D%2249%22%20text-anchor%3D%22middle%22%20font-size%3D%2212%22%20fill%3D%22%23224D7E%22%3E%E5%9C%B0%E5%9D%80%EF%BC%9A0x1000%3C%2Ftext%3E%3Crect%20x%3D%2210%22%20y%3D%22174%22%20width%3D%22146%22%20height%3D%2265%22%20rx%3D%228%22%20fill%3D%22%23DAF2E7%22%20stroke%3D%22%2342A078%22%20stroke-width%3D%221.5%22%2F%3E%3Ctext%20x%3D%2283%22%20y%3D%22194%22%20text-anchor%3D%22middle%22%20font-size%3D%2212%22%20font-weight%3D%22bold%22%20fill%3D%22%2318684C%22%3Estd%3A%3Astring%26amp%3B%20r%3C%2Ftext%3E%3Ctext%20x%3D%2283%22%20y%3D%22213%22%20text-anchor%3D%22middle%22%20font-size%3D%2211%22%20fill%3D%22%2318684C%22%3E%E5%88%AB%E5%90%8D%E5%85%B3%E7%B3%BB%3C%2Ftext%3E%3Ctext%20x%3D%2283%22%20y%3D%22227%22%20text-anchor%3D%22middle%22%20font-size%3D%2211%22%20fill%3D%22%2318684C%22%3E%E6%B2%A1%E6%9C%89%E7%8B%AC%E7%AB%8B%E6%8C%87%E9%92%88%E5%80%BC%3C%2Ftext%3E%3Crect%20x%3D%22188%22%20y%3D%22174%22%20width%3D%22146%22%20height%3D%2265%22%20rx%3D%228%22%20fill%3D%22%23F8E8D4%22%20stroke%3D%22%23C29151%22%20stroke-width%3D%221.5%22%2F%3E%3Ctext%20x%3D%22261%22%20y%3D%22194%22%20text-anchor%3D%22middle%22%20font-size%3D%2212%22%20font-weight%3D%22bold%22%20fill%3D%22%2383531F%22%3Estd%3A%3Astring*%20p%3C%2Ftext%3E%3Ctext%20x%3D%22261%22%20y%3D%22213%22%20text-anchor%3D%22middle%22%20font-size%3D%2211%22%20fill%3D%22%2383531F%22%3E%E5%AD%98%E5%82%A8%E6%8C%87%E9%92%88%E5%80%BC%3C%2Ftext%3E%3Ctext%20x%3D%22261%22%20y%3D%22227%22%20text-anchor%3D%22middle%22%20font-size%3D%2211%22%20fill%3D%22%2383531F%22%3E0x1000%3C%2Ftext%3E%3Cpath%20d%3D%22M82%20170%20L82%20115%20Q82%2098%2098%2086%20L149%2067%22%20stroke%3D%22%2342A078%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M149%2067%20L139%2069%20L146%2078%20Z%22%20fill%3D%22%2342A078%22%2F%3E%3Cpath%20d%3D%22M261%20170%20L261%20115%20Q261%2098%20245%2086%20L194%2067%22%20stroke%3D%22%23C29151%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M194%2067%20L204%2069%20L197%2078%20Z%22%20fill%3D%22%23C29151%22%2F%3E%3Ctext%20x%3D%22172%22%20y%3D%22264%22%20text-anchor%3D%22middle%22%20font-size%3D%2211%22%20fill%3D%22currentColor%22%3E%E4%B8%A4%E8%80%85%E9%83%BD%E8%AE%BF%E9%97%AE%20s%EF%BC%8C%E4%BD%86%E8%AF%AD%E8%A8%80%E8%AF%AD%E4%B9%89%E4%B8%8D%E5%90%8C%3C%2Ftext%3E%3Ctext%20x%3D%22172%22%20y%3D%22280%22%20text-anchor%3D%22middle%22%20font-size%3D%2210%22%20fill%3D%22%23888888%22%3E%E5%BC%95%E7%94%A8%E7%9A%84%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0%E7%94%B1%E7%BC%96%E8%AF%91%E5%99%A8%E5%86%B3%E5%AE%9A%3C%2Ftext%3E%3C%2Fsvg%3E)
-
-### 悬空指针（Dangling Pointer）
+### 完美转发
+就是为了让我们在传递参数的时候， 保持原来的参数类型（左引用保持左引用，右引用保持右引用）。 为了解决这个问题，我们应该使用 `std::forward` 来进行参数的转发（传递）：
 ```
-std::string* p;
-
-{
-    std::string s = "Hello";
-    p = &s;
+#include <iostream>
+#include <utility>
+void reference(int& v) {
+    std::cout << "左值引用" << std::endl;
 }
+void reference(int&& v) {
+    std::cout << "右值引用" << std::endl;
+}
+template <typename T>
+void pass(T&& v) {
+    std::cout << "              普通传参: ";
+    reference(v);
+    std::cout << "       std::move 传参: ";
+    reference(std::move(v));
+    std::cout << "    std::forward 传参: ";
+    reference(std::forward<T>(v));
+    std::cout << "static_cast<T&&> 传参: ";
+    reference(static_cast<T&&>(v));
+}
+int main() {
+    std::cout << "传递右值:" << std::endl;
+    pass(1);
 
-// s 的生命周期已经结束
+    std::cout << "传递左值:" << std::endl;
+    int v = 1;
+    pass(v);
 
-std::cout << *p; // 未定义行为
-```
-这里 `p` 仍然是一个存在的指针对象，但是它保存的地址不再对应一个存活的 `std::string` 对象。
-
-引用也可能悬空：
-```
-std::string& getString()
-{
-    std::string s = "Hello";
-    return s;
+    return 0;
 }
 ```
-函数返回后 `s` 已经销毁，返回的引用不再有效。
+输出结果为：
+```
+传递右值:
+              普通传参: 左值引用
+       std::move 传参: 右值引用
+    std::forward 传参: 右值引用
+static_cast<T&&> 传参: 右值引用
+传递左值:
+              普通传参: 左值引用
+       std::move 传参: 右值引用
+    std::forward 传参: 左值引用
+static_cast<T&&> 传参: 左值引用
+```
+即无论传递参数是左值还是右值，普通传参都会将其视为左值进行转发；
+而 ```std::move() ```总会接受一个左值，从而转发调用 ```reference(int&&)``` 输出右值引用；
+std::forward没有造成任何多余拷贝，同时==完美转发==🟡了函数实参给了内部调用的其他函数。
+***std::foward*** 和std::move一样，没有做任何事情，***std::move单纯的将左值转换为一个右值***，
+***std::forward也是单纯的将参数进行一个类型准换***，从现象上看```std::forward<T>(v)和static_cast<T&&>(v)```是完全一样的。
+当 `std::forward` 接受左值时，`_Tp` 被推导为左值，所以返回值为左值；而当其接受右值时， `_Tp` 被推导为 右值引用，则基于坍缩规则，返回值便成为了 `&& + &&` 的右值
 
-**一个对象的访问关系可以仍然存在，但被访问对象的生命周期可能已经结束。**
-有一个特殊情况值得记住：
-```
-const std::string& r = std::string("Hello");
-```
-这里临时 `std::string` 对象的生命周期会延长到局部引用 `r` 的生命周期结束。
-但这属于 C++ 规定的特定临时对象生命周期延长规则，不代表引用普遍具有延长对象生命周期的能力。
+
